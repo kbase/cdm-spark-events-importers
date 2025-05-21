@@ -100,4 +100,35 @@ services:
       DATANUCLEUS_AUTO_CREATE_TABLES: true
       DELTALAKE_WAREHOUSE_DIR: s3a://cdm-lake/warehouse
 
-# TODO Add test image based on spark standalone
+  # A test image for testing purposes. The importers repo is built into the event processor,
+  # and so does not have an independent image.
+  test-container:  # do not use underscore or spark will barf
+    build:
+      context: .
+      dockerfile: Dockerfile
+    platform: linux/amd64
+    depends_on:
+      postgres:
+        condition: service_started
+      spark-worker-1:
+        condition: service_started
+      spark-worker-2:
+        condition: service_started
+      minio-create-bucket:
+        condition: service_completed_successfully
+    environment:
+      # test variables used by the test helper code
+      IMP_MINIO_URL: http://minio:9000
+      IMP_MINIO_ACCESS_KEY: importers
+      IMP_MINIO_SECRET_KEY: impassword
+      IMP_SPARK_MASTER_URL: spark://spark-master:7077
+      IMP_SPARK_DRIVER_HOST: test-container
+
+      # variables used by the base image
+      POSTGRES_USER: hive
+      POSTGRES_PASSWORD: hivepassword
+      POSTGRES_DB: hive
+      POSTGRES_URL: postgres:5432
+      DELTALAKE_WAREHOUSE_DIR: s3a://cdm-lake/warehouse
+      # Importers should not implicitly create tables, but hive won't start without this
+      DATANUCLEUS_AUTO_CREATE_TABLES: true
