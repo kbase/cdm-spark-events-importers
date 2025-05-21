@@ -1,0 +1,20 @@
+[project]
+name = "cdm-spark-events-importers"
+version = "0.1.0"
+description = "Event importers for the KBase CDM"
+readme = "README.md"
+requires-python = ">=3.11"
+
+# Note that these dependencies must be kept in sync with those
+# in the event processor. Adding a depency here will not make it
+# available when the importer code is run via the event processor.
+dependencies = [
+    "delta-spark==3.3.1",
+    "pyspark==3.5.5",
+]
+
+[dependency-groups]
+dev = [
+    "pytest==8.3.5",
+    "pytest-cov==6.1.1",
+]
