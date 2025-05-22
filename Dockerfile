@@ -1,17 +1,12 @@
-FROM ghcr.io/kbase/cdm-spark-standalone:pr-32
+FROM ghcr.io/kbase/cdm-spark-standalone:pr-34
 
 # This is a container specifically for running tests. It is not intended to be deployed anywhere.
 
 USER root
 
-RUN apt update && apt install -y tini
-
 RUN mkdir /uvinstall
 
 WORKDIR /uvinstall
-
-RUN pip install --upgrade pip && \
-    pip install uv
 
 COPY pyproject.toml uv.lock .python-version .
 
