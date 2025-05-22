@@ -43,7 +43,7 @@ services:
       - ./s3_policies:/s3_policies
 
   spark-master:
-    image: ghcr.io/kbase/cdm-spark-standalone:pr-32
+    image: ghcr.io/kbase/cdm-spark-standalone:pr-34
     platform: linux/amd64
     ports:
       - 8090:8090
@@ -61,7 +61,7 @@ services:
       DELTALAKE_WAREHOUSE_DIR: s3a://cdm-lake/warehouse
 
   spark-worker-1:
-    image: ghcr.io/kbase/cdm-spark-standalone:pr-32
+    image: ghcr.io/kbase/cdm-spark-standalone:pr-34
     platform: linux/amd64
     depends_on:
       - spark-master
@@ -81,7 +81,7 @@ services:
       DELTALAKE_WAREHOUSE_DIR: s3a://cdm-lake/warehouse
 
   spark-worker-2:
-    image: ghcr.io/kbase/cdm-spark-standalone:pr-32
+    image: ghcr.io/kbase/cdm-spark-standalone:pr-34
     platform: linux/amd64
     depends_on:
       - spark-master
