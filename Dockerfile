@@ -1,0 +1,35 @@
+FROM ghcr.io/kbase/cdm-spark-standalone:pr-32
+
+# This is a container specifically for running tests. It is not intended to be deployed anywhere.
+
+USER root
+
+RUN apt update && apt install -y tini
+
+RUN mkdir /uvinstall
+
+WORKDIR /uvinstall
+
+RUN pip install --upgrade pip && \
+    pip install uv
+
+COPY pyproject.toml uv.lock .python-version .
+
+ENV UV_PROJECT_ENVIRONMENT=/opt/bitnami/python
+RUN uv sync --locked --inexact --dev
+
+RUN mkdir /imp_test
+
+COPY entrypoint.sh /imp_test/
+COPY cdmeventimporters /imp_test/cdmeventimporters
+COPY test /imp_test/test
+
+ENV PYTHONPATH=/imp_test:/imp_test/test
+
+WORKDIR /imp_test
+
+USER spark_user
+
+ENV IMP_SPARK_JARS_DIR=/opt/bitnami/spark/jars
+
+ENTRYPOINT ["tini", "--", "/imp_test/entrypoint.sh"]
