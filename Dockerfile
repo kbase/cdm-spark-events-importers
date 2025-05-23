@@ -15,9 +15,7 @@ RUN uv sync --locked --inexact --dev
 
 RUN mkdir /imp_test && chown spark_user /imp_test
 
-COPY entrypoint.sh /imp_test/
-COPY cdmeventimporters /imp_test/cdmeventimporters
-COPY test /imp_test/test
+COPY entrypoint.sh /
 
 ENV PYTHONPATH=/imp_test:/imp_test/test
 
@@ -27,4 +25,4 @@ USER spark_user
 
 ENV IMP_SPARK_JARS_DIR=/opt/bitnami/spark/jars
 
-ENTRYPOINT ["tini", "--", "/imp_test/entrypoint.sh"]
+ENTRYPOINT ["tini", "--", "/entrypoint.sh"]
