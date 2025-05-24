@@ -32,7 +32,7 @@ _CHECKM2_DB_SCHEMA = StructType([
     StructField("Total_Coding_Sequences", IntegerType()),
     StructField("Total_Contigs", IntegerType()),
     StructField("Max_Contig_Length", IntegerType()),
-    StructField("AAdditional_Notes", StringType(), True),  # allow nulls
+    StructField("Additional_Notes", StringType(), True),  # allow nulls
 ])
 
 
