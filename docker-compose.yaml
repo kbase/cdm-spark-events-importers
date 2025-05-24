@@ -123,6 +123,7 @@ services:
       IMP_MINIO_SECRET_KEY: impassword
       IMP_SPARK_MASTER_URL: spark://spark-master:7077
       IMP_SPARK_DRIVER_HOST: test-container
+      IMP_MINIO_IMPORTER_RAW_BUCKET: cts-output
 
       # variables used by the base image
       POSTGRES_USER: hive
@@ -132,3 +133,7 @@ services:
       DELTALAKE_WAREHOUSE_DIR: s3a://cdm-lake/warehouse
       # Importers should not implicitly create tables, but hive won't start without this
       DATANUCLEUS_AUTO_CREATE_TABLES: true
+    volumes:
+      # when running pytest with coverage put coverage data here - note needs to be world writeable
+      - ./coverage:/coverage
+

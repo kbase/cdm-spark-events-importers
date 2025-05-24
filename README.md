@@ -37,14 +37,10 @@ TODO Add importer notes
 
 ### Running tests
 
-
-TODO: make the tests actually useful.
-
-TODO: figure out how to run tests. The below won't work.
-
 ```
-uv sync --dev  # only required on first run or when the uv.lock file changes
-PYTHONPATH=. uv run pytest test
+docker compose up -d --build
+docker compose exec test-container pytest test
+docker compose down  # optionally, leave up if you want to test again
 ```
 
 ### Exit from prototype status

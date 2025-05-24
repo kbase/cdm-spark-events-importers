@@ -3,8 +3,11 @@ General utilities useful for importing data into the CDM.
 """
 
 from delta.tables import DeltaTable
+from pathlib import Path
 from pyspark.sql import SparkSession
 from pyspark.sql.dataframe import DataFrame
+from typing import Any
+import yaml
 
 from cdmeventimporters.arg_checkers import (
     not_falsy as _not_falsy,
@@ -51,3 +54,13 @@ def merge_spark_df_to_deltatable(
     if update:
         preex = preex.whenMatchedUpdateAll()
     preex.execute()
+
+
+def get_importer_metadata(importer_yaml_path: Path) -> dict[str, Any]:
+    """
+    Read the importer yaml file specified and return the importer metadata embedded within it,
+    or none if there is no metadata.
+    """
+    with open(importer_yaml_path) as f:
+        data = yaml.safe_load(f)
+    return data.get("importer_meta")

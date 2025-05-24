@@ -13,7 +13,7 @@ COPY pyproject.toml uv.lock .python-version .
 ENV UV_PROJECT_ENVIRONMENT=/opt/bitnami/python
 RUN uv sync --locked --inexact --dev
 
-RUN mkdir /imp_test
+RUN mkdir /imp_test && chown spark_user /imp_test
 
 COPY entrypoint.sh /imp_test/
 COPY cdmeventimporters /imp_test/cdmeventimporters

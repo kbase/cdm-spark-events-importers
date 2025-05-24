@@ -36,6 +36,9 @@ def _find_jars():
     return ", ".join(results)
 
 
+_JARS = _find_jars()
+
+
 def spark_session(app_name: str, executor_cores: int = 1) -> SparkSession:
     """
     Generate a spark session for an importer.
@@ -52,7 +55,7 @@ def spark_session(app_name: str, executor_cores: int = 1) -> SparkSession:
         "spark.executor.cores": str(executor_cores),
         "spark.driver.host": os.environ["IMP_SPARK_DRIVER_HOST"],
         "spark.master": os.environ["IMP_SPARK_MASTER_URL"],
-        "spark.jars": _find_jars(),
+        "spark.jars": _JARS,
         
         # Dynamic allocation is set up in the base image setup.sh script
 
@@ -98,6 +101,7 @@ class SparkProvider:
         if not app_name or not app_name.strip():
             raise ValueError("app_name cannot be whitespace only")
         self.app_name = app_name
+        self.spark = None
     
     def __call__(self, *, executor_cores: int = 1) -> SparkSession:
         """
