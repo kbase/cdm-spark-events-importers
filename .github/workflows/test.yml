@@ -32,7 +32,7 @@ jobs:
         chmod a+w coverage
 
         docker compose up -d --build
-        docker compose exec test-container pytest test -vv --cov=cdmeventimporters --cov-report xml:/coverage/coverage.xml
+        docker compose exec test-container pytest test -vv --cov=cdmeventimporters --cov-report xml:./coverage/coverage.xml
         docker compose down
 
     - name: Upload coverage to Codecov
