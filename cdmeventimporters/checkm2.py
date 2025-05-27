@@ -48,8 +48,8 @@ def run_import(get_spark, job_info: dict[str, Any], override_metadata: dict[str,
     logr = logging.getLogger(__name__)
 
     # TODO DOCS document job_info structure
-    job_id = job_info["job_id"]
-    output_files = [f["file"] for f in job_info["output"] if f["file"].endswith(_QUAL_REP)]
+    job_id = job_info["id"]
+    output_files = [f["file"] for f in job_info["outputs"] if f["file"].endswith(_QUAL_REP)]
     logr.info(f"Importing {len(output_files)} CheckM2 quality reports from CTS job {job_id}")
     
     meta = utilities.get_importer_metadata((Path(__file__) / ".." / "checkm2.yaml").resolve())

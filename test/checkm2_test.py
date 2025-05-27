@@ -83,8 +83,8 @@ def test_checkm2_success_2_files():
     file1 = f"{bucket}/checkm2/sub1/quality_report.tsv"
     file2 = f"{bucket}/checkm2/sub2/quality_report.tsv"
     job_info = {
-        "job_id": "tstjob",
-        "output": [
+        "id": "tstjob",
+        "outputs": [
             {
                 "file": file1,
                 "crc64nvme": "fake",
