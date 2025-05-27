@@ -4,7 +4,6 @@ Importer for Checkm2 quality metrics.
 
 from delta.tables import DeltaTable
 import logging
-from pathlib import Path
 from pyspark.sql.functions import col, lit
 from typing import Any
 
@@ -15,7 +14,7 @@ _QUAL_REP = "quality_report.tsv"
 _JOB_ID_COL = "cts_job_id"
 
 
-def run_import(get_spark, job_info: dict[str, Any], override_metadata: dict[str, Any] = None):
+def run_import(get_spark, job_info: dict[str, Any], metadata: dict[str, Any]):
     """
     Run the CheckM2 import.
     
@@ -39,8 +38,7 @@ def run_import(get_spark, job_info: dict[str, Any], override_metadata: dict[str,
     get_spark - a function to get a spark session. Has a single keyword argument,
         executor_cores, that sets the cores per spark executor for the job. Defaults to 1.
     job_info - information about the job that ran, in particular the job ID and output files.
-    override_metadata - instead of loading data from the checkm2.yaml file, use this metadata
-        instead. Useful for testing. The events processor will never use it.
+    metadata - the metadata, if any, from the importer's module file.
     """
     
     # If there are different versions of the image that require different processing,
@@ -51,13 +49,14 @@ def run_import(get_spark, job_info: dict[str, Any], override_metadata: dict[str,
     job_id = job_info["id"]
     output_files = [f["file"] for f in job_info["outputs"] if f["file"].endswith(_QUAL_REP)]
     logr.info(f"Importing {len(output_files)} CheckM2 quality reports from CTS job {job_id}")
+    # We could check the crc64nvmes here, but there's still the possibility of a race condition
+    # between checking the crc and loading the file into the deltatable
     
-    meta = utilities.get_importer_metadata((Path(__file__) / ".." / "checkm2.yaml").resolve())
-    deltaname = meta["deltatable"]
-    if override_metadata:
-        olddelta = deltaname
-        deltaname = override_metadata["deltatable"]
-        logr.info(f"Overriding configured deltatable, {olddelta}, with {deltaname}")
+    deltaname = metadata.get("deltatable")
+    if not deltaname:
+        raise ValueError(
+            "Expected a 'deltatable' key in the importer metadata with the db table as the value"
+        )
     
     # For now just using 1 core per executor, this is mostly IO. If we want to be able
     # to set cores probably need output file size and input file count info
