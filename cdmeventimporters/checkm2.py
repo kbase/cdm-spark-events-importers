@@ -48,6 +48,8 @@ def run_import(get_spark, job_info: dict[str, Any], metadata: dict[str, Any]):
     # TODO DOCS document job_info structure
     job_id = job_info["id"]
     output_files = [f["file"] for f in job_info["outputs"] if f["file"].endswith(_QUAL_REP)]
+    if not output_files:
+        raise ValueError("No checkm2 quality report files found")
     logr.info(f"Importing {len(output_files)} CheckM2 quality reports from CTS job {job_id}")
     # We could check the crc64nvmes here, but there's still the possibility of a race condition
     # between checking the crc and loading the file into the deltatable
