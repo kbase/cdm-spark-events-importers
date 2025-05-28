@@ -9,4 +9,4 @@ image:  ghcr.io/kbasetest/cdm_checkm2
 # utilities.py.
 importer_meta:
     # The table where checkm2 data should be stored.
-    deltatable: berdl-cdm.checkm2
+    deltatable: berdl_cdm.checkm2
