@@ -117,9 +117,7 @@ def test_checkm2_success_2_files():
 
         # run the importer
         sparkprov = SparkProvider("test_checkm2")
-        checkm2.run_import(
-            sparkprov, job_info, override_metadata={"deltatable": "checkm2_test.checkm2"}
-        )
+        checkm2.run_import(sparkprov, job_info, {"deltatable": "checkm2_test.checkm2"})
         
         # might as well keep using the importer spark session. If needed make yet another
         # new session
