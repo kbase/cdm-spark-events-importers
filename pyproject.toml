@@ -10,7 +10,7 @@ requires-python = ">=3.11"
 # available when the importer code is run via the event processor.
 dependencies = [
     "delta-spark==3.3.1",
-    "pyspark==3.5.5",
+    "pyspark==3.5.6",
 ]
 
 [dependency-groups]
