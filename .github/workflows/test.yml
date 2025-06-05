@@ -1,4 +1,4 @@
-name: KBase CDM Task Service tests
+name: KBase CDM Event Importer Tests
 
 on:
   pull_request:
