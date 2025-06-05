@@ -9,14 +9,15 @@ requires-python = ">=3.11"
 # in the event processor. Adding a depency here will not make it
 # available when the importer code is run via the event processor.
 dependencies = [
-    "delta-spark==3.3.1",
-    "pyspark==3.5.5",
+    "delta-spark>=3.3.2",
+    "pyspark>=3.5.6",
 ]
 
 [dependency-groups]
 dev = [
-    "boto3>=1.38.22",
-    "ipython>=9.2.0",
-    "pytest==8.3.5",
-    "pytest-cov==6.1.1",
+    "boto3>=1.38.31",
+    "ipython>=9.3.0",
+    "pytest>=8.4.0",
+    "pytest-cov>=6.1.1",
+    "uv-bump>=0.1.2",
 ]
