@@ -5,8 +5,7 @@ py_module: cdmeventimporters.checkm2
 # The image associated with the importer. This importer will run when a CTS job completes
 # with this image.
 image:  ghcr.io/kbasetest/cdm_checkm2
-# Metadata for the importer. This can be read with the get_importer_metadata() function in
-# utilities.py.
+# Metadata for the importer.
 importer_meta:
     # The table where checkm2 data should be stored.
     deltatable: berdl_cdm.checkm2

@@ -3,16 +3,101 @@
 **This is currently a prototype**
 
 Importer code to run based on an event in the
-[CDM Spark Event Processor](https://github.com/kbase/cdm-spark-events)
+[CDM Spark Event Processor (CSEP)](https://github.com/kbase/cdm-spark-events).
 
-TODO Add importer notes
+Currently the CSEP responds to jobs completing in the
+[CDM Task Service (CTS)](https://github.com/kbase/cdm-task-service)
 
-* Should be pretty basic - load xSV files into a DF, do some DF manipulations, save to SQL
-    * Anything more complex should likely go into the CTS job image
-* Don't assume each event will only ever run once - protect against duplicates (helper code)
-* The same importer code runs for different versions of the same image. The importer code
-  should check the image digest and run appropriate code based on that.
+## Adding an importer
 
+### Working example
+
+There is a working example of a CheckM2 importer
+[YAML specification file](./cdmeventimporters/checkm2.yaml),
+[import code](./cdmeventimporters/checkm2.py), and [tests](./test/checkm2_test.py) in this repo.
+As of this writing they are the first attempt at an importer and will likely improve over time,
+so it is recommended to check back every few hours.
+
+### Instructions
+
+To add an importer two files must be added under the `cdmeventimporters` directory:
+
+* A python module file that performs the import of the CTS output into Spark Deltatables.
+    * The module must contain a `run_import` top level method that takes three
+      parameters:
+        * A function, that when called, returns a SparkSession correctly configured
+          with S3 Deltatable information and credentials.
+            * The function takes one keyword only argument: `executor_cores`, which
+              is an integer that specifies the number of CPU cores for each Spark
+              executor. The default is one, which in many cases is likely enough
+              since most import work should be IO heavy.
+        * Information about the job - see the data structure documentation below.
+        * The metadata, if any, from the YAML file (see below).
+* A YAML file that specifies when the importer should run (see below).
+
+#### Job information data structure
+
+The data structure provided in the 2nd argument to `run_import` is a dictionary:
+
+```
+{
+    "id": <the CTS job ID>,
+    "outputs": [
+        {
+            "file": <the S3 file path for the CTS output file starting with the bucket>,
+            "crc64nvme: <the base64 encoded crc64nvme file checksum>,
+        },
+        ...
+    ],
+    "image": <the image name of CTS Docker image that was run as part of the job>,
+    "image_digest": <the digest of the image>,
+    "input_file_count": <the number of input files for the job>,
+    "output_file_count": <the number of output files for the job>,
+    "completion_time": <the time the job completed as an ISO8601 string>,
+}
+```
+
+For a simple importer probably only the `'id` and `outputs` fields are necessary. The job ID
+should be included in the deltatable for data lineage tracking purposes.
+
+#### YAML file structure
+
+The major purpose of the YAML file is to map CTS image names to importer code so that the event
+processor knows what image to run for a given job. The structure looks like this:
+
+```
+# The name of the importer. Informational purposes only.
+name: <an arbitrary name for the importer>
+# The location of the importer module containing the `run_import` method in python
+# module format, e.g. "cdmeventimporters.my_module"
+py_module: <the importer module>
+# The image associated with the importer. This importer will run when a CTS job completes
+# with this image. Example: ghcr.io/kbasetest/cdm_checkm2
+image:  <CTS Docker image name>
+# Metadata for the importer. These are currently arbitrary key value pairs, and
+# are provided to the importer in the 3rd parameter to run_import.
+importer_meta:
+    <key1>: <value1>,
+    ...
+    <keyN>: <valueN>,
+```
+
+Note that multiple YAML files cannot reference the same Docker image.
+
+### Implementation notes
+
+* In almost all cases, the importers should be reading CSV / TSV files or their equivalents
+  and writing them into Deltatables and not much else. Any heavy computational lifting should
+  be done in the CTS job. The importers should use `pyspark`, `delta-spark` and not much
+  else for processing.
+* Do not assume that the event will only occur once. In the case of upstream failures, an
+  event may be provided to the importer more than once - the importer should take this into
+  account and prevent adding duplicate data to the database. the CheckM2 example code shows
+  how to handle this.
+* The same importer is called for all versions of a Docker image. If data needs to be processed
+  differently for different versions of the image, it is the importer's responsibility to do so.
+  The image digest is provided for this reason. The image tag is deliberately not provided
+  as it is mutable.
 
 ## Development
 
