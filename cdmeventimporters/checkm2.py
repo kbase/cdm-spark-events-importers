@@ -45,7 +45,6 @@ def run_import(get_spark, job_info: dict[str, Any], metadata: dict[str, Any]):
     # check the image digest (job_info["image_digest"]) and pick which code to run based on that.
     logr = logging.getLogger(__name__)
 
-    # TODO DOCS document job_info structure
     job_id = job_info["id"]
     output_files = [f["file"] for f in job_info["outputs"] if f["file"].endswith(_QUAL_REP)]
     if not output_files:
@@ -61,7 +60,7 @@ def run_import(get_spark, job_info: dict[str, Any], metadata: dict[str, Any]):
         )
     
     # For now just using 1 core per executor, this is mostly IO. If we want to be able
-    # to set cores probably need output file size and input file count info
+    # to set cores probably need output file size info
     spark = get_spark()
     # TODO CODE could probably add some helper functions for some of this
     delta_schema = DeltaTable.forName(spark, deltaname).toDF().schema
