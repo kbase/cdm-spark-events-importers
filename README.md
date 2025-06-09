@@ -63,7 +63,7 @@ should be included in the deltatable for data lineage tracking purposes.
 #### YAML file structure
 
 The major purpose of the YAML file is to map CTS image names to importer code so that the event
-processor knows what image to run for a given job. The structure looks like this:
+processor knows what importer code to run for a given job. The structure looks like this:
 
 ```
 # The name of the importer. Informational purposes only.
