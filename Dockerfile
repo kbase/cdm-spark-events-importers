@@ -1,4 +1,4 @@
-FROM ghcr.io/kbase/cdm-spark-standalone:pr-36
+FROM ghcr.io/kbase/cdm-spark-standalone:pr-42
 
 # This is a container specifically for running tests. It is not intended to be deployed anywhere.
 
