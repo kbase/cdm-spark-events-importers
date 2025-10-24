@@ -39,15 +39,19 @@ def _find_jars():
 _JARS = _find_jars()
 
 
-def spark_session(app_name: str, executor_cores: int = 1) -> SparkSession:
+def spark_session(app_name: str, user: str, executor_cores: int = 1) -> SparkSession:
     """
     Generate a spark session for an importer.
     
     app_name - The name for the spark application. This should be unique among applications.
+    user - the user running the spark session.
     executor_cores - the number of cores to use per executor.
     """
     if not app_name or not app_name.strip():
         raise ValueError("app_name cannot be whitespace only")
+    if not user or not user.strip():
+        raise ValueError("user cannot be whitespace only")
+    warehouse_prefix = os.environ['IMP_SQL_WAREHOUSE_PREFIX'].rstrip("/")
     config = {
         # Basic config
         "spark.app.name": app_name,
@@ -71,8 +75,9 @@ def spark_session(app_name: str, executor_cores: int = 1) -> SparkSession:
         "spark.sql.catalog.spark_catalog": "org.apache.spark.sql.delta.catalog.DeltaCatalog",
         "spark.databricks.delta.retentionDurationCheck.enabled": "false",
         "spark.sql.catalogImplementation": "hive",
+        "spark.sql.warehouse.dir": f"{warehouse_prefix}/{user}/",
         
-        # Hive & S3 warehouse dir config is set up in the base image
+        # Hive config is set up in the base image
     }
     
     spark_conf = SparkConf().setAll(list(config.items()))
@@ -92,7 +97,7 @@ class SparkProvider:
     on the spark workers.
     """
     
-    def __init__(self, app_name: str):
+    def __init__(self, app_name: str, user: str):
         """
         Create the spark provider.
         
@@ -100,7 +105,10 @@ class SparkProvider:
          """
         if not app_name or not app_name.strip():
             raise ValueError("app_name cannot be whitespace only")
+        if not user or not user.strip():
+            raise ValueError("user cannot be whitespace only")
         self.app_name = app_name
+        self.user = user
         self.spark = None
     
     def __call__(self, *, executor_cores: int = 1) -> SparkSession:
@@ -109,7 +117,7 @@ class SparkProvider:
         
         executor_cores - the number of cores to use per executor.
         """
-        self.spark = spark_session(self.app_name, executor_cores=executor_cores)
+        self.spark = spark_session(self.app_name, self.user, executor_cores=executor_cores)
         return self.spark
     
     def stop(self):

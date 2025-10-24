@@ -2,16 +2,50 @@
 Importer for Checkm2 quality metrics.
 """
 
-from delta.tables import DeltaTable
 import logging
+from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, lit
+from pyspark.sql.types import StructType, StructField, StringType, FloatType, IntegerType
+from pyspark.sql.utils import AnalysisException
 from typing import Any
 
 from cdmeventimporters import utilities
 
 
+CTS_JOB_ID = "cts_job_id"
+CHECKM2_NAME_FIELD = "Name"
 _QUAL_REP = "quality_report.tsv"
-_JOB_ID_COL = "cts_job_id"
+
+
+CHECKM2_DB_SCHEMA = StructType([
+    StructField(CHECKM2_NAME_FIELD, StringType()),
+    StructField(CTS_JOB_ID, StringType()),
+    StructField("Completeness", FloatType()),
+    StructField("Contamination", FloatType()),
+    StructField("Completeness_Model_Used", StringType()),
+    StructField("Translation_Table_Used", IntegerType()),
+    StructField("Coding_Density", FloatType()),
+    StructField("Contig_N50", IntegerType()),
+    StructField("Average_Gene_Length", FloatType()),
+    StructField("Genome_Size", IntegerType()),
+    StructField("GC_Content", FloatType()),
+    StructField("Total_Coding_Sequences", IntegerType()),
+    StructField("Total_Contigs", IntegerType()),
+    StructField("Max_Contig_Length", IntegerType()),
+    StructField("Additional_Notes", StringType(), True),  # allow nulls
+])
+
+
+def _ensure_table(spark: SparkSession, logr: logging.Logger, full_tablename: str):
+    namespace = full_tablename.split(".")[0]  # assumes just namespace and table
+    spark.sql(f"CREATE DATABASE IF NOT EXISTS {namespace}")
+    try:
+        spark.sql(f"DESCRIBE TABLE {full_tablename}")
+        # table exists, all done
+    except AnalysisException:
+        logr.info(f"Creating new Delta table {full_tablename}")
+        empty_df = spark.createDataFrame([], CHECKM2_DB_SCHEMA)
+        empty_df.write.format("delta").option("compression", "snappy").saveAsTable(full_tablename)
 
 
 def run_import(get_spark, job_info: dict[str, Any], metadata: dict[str, Any]):
@@ -58,23 +92,19 @@ def run_import(get_spark, job_info: dict[str, Any], metadata: dict[str, Any]):
         raise ValueError(
             "Expected a 'deltatable' key in the importer metadata with the db table as the value"
         )
+    deltaname = job_info["namespace_prefix"] + deltaname
     
     # For now just using 1 core per executor, this is mostly IO. If we want to be able
     # to set cores probably need output file size info
     spark = get_spark()
     # TODO CODE could probably add some helper functions for some of this
-    delta_schema = DeltaTable.forName(spark, deltaname).toDF().schema
-    schema_fields = {f.name for f in delta_schema}
-    if _JOB_ID_COL not in schema_fields:
-        raise ValueError(
-            f"The expected job id column, {_JOB_ID_COL}, is not in the configured "
-            + f"CheckM2 deltatable, {deltaname}"
-    )
+    _ensure_table(spark, logr, deltaname)
+    schema_fields = {f.name for f in CHECKM2_DB_SCHEMA}
     df = spark.read.option(
         "header", True
         ).option("sep", "\t"
         ).csv([f"s3a://{f}" for f in output_files]
-        ).withColumn(_JOB_ID_COL, lit(job_id)
+        ).withColumn(CTS_JOB_ID, lit(job_id)
     )
     got_fields = set(df.columns)
     if schema_fields - got_fields:
@@ -84,7 +114,7 @@ def run_import(get_spark, job_info: dict[str, Any], metadata: dict[str, Any]):
     # coerce schema to match deltatable, needs to happen AFTER the column existence check
     columns = [
         (col(field.name).cast(field.dataType)).alias(field.name)
-        for field in delta_schema
+        for field in CHECKM2_DB_SCHEMA
     ]
     df = df.select(*columns)
     
