@@ -49,6 +49,7 @@ The data structure provided in the 2nd argument to `run_import` is a dictionary:
         },
         ...
     ],
+    "namespace_prefix": <the prefix to use for any Spark SQL namespaces>,
     "image": <the image name of CTS Docker image that was run as part of the job>,
     "image_digest": <the digest of the image>,
     "input_file_count": <the number of input files for the job>,
@@ -57,8 +58,9 @@ The data structure provided in the 2nd argument to `run_import` is a dictionary:
 }
 ```
 
-For a simple importer probably only the `'id` and `outputs` fields are necessary. The job ID
-should be included in the deltatable for data lineage tracking purposes.
+For a simple importer probably only the `id`, `outputs`, and `namespace_prefix`
+fields are necessary. The job ID should be included in the deltatable for data lineage
+tracking purposes. Any SQL namespaces the importer uses must be prefixed with `namespace_prefix`.
 
 #### YAML file structure
 
@@ -92,7 +94,7 @@ Note that multiple YAML files cannot reference the same Docker image.
   else for processing.
 * Do not assume that the event will only occur once. In the case of upstream failures, an
   event may be provided to the importer more than once - the importer should take this into
-  account and prevent adding duplicate data to the database. the CheckM2 example code shows
+  account and prevent adding duplicate data to the database. The CheckM2 example code shows
   how to handle this.
 * The same importer is called for all versions of a Docker image. If data needs to be processed
   differently for different versions of the image, it is the importer's responsibility to do so.
