@@ -18,6 +18,11 @@ else
   echo "bucket $MINIO_IMPORTER_SQL_BUCKET already exists"
 fi
 
+ required for hive metastore to start, since it stats the warehouse path
+# seems to work even though there's no real file at the warehouse path
+echo -n "" | mc pipe minio/$MINIO_IMPORTER_SQL_BUCKET/$MINIO_SQL_WAREHOUSE_PATH/.keep
+
+
 # create policies
 mc admin policy create minio test-importers-read-write-policy /s3_policies/test-importers-read-write-policy.json
 
