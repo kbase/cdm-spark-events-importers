@@ -64,10 +64,11 @@ services:
       minio-create-bucket:
         condition: service_completed_successfully
     healthcheck:
-      test: ["CMD", "nc", "-z", "localhost", "9083"]
-      interval: 30s
+      # hive startup is slooooow
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/9083'"]
+      interval: 10s
       timeout: 10s
-      retries: 3
+      retries: 15
 
   spark-master:
     image: ghcr.io/berdatalakehouse/kube_spark_manager_image:pr-7
@@ -139,6 +140,8 @@ services:
         condition: service_started
       minio-create-bucket:
         condition: service_completed_successfully
+      hive-metastore:
+        condition: service_healthy
     environment:
       # test variables used by the test helper code
       IMP_MINIO_URL: http://minio:9000
