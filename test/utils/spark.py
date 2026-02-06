@@ -55,7 +55,6 @@ def spark_session(app_name: str, user: str, executor_cores: int = 1) -> SparkSes
     config = {
         # Basic config
         "spark.app.name": app_name,
-        # Overrides base image configuration
         "spark.executor.cores": str(executor_cores),
         "spark.driver.host": os.environ["IMP_SPARK_DRIVER_HOST"],
         "spark.master": os.environ["IMP_SPARK_MASTER_URL"],
@@ -74,10 +73,18 @@ def spark_session(app_name: str, user: str, executor_cores: int = 1) -> SparkSes
         "spark.sql.extensions": "io.delta.sql.DeltaSparkSessionExtension",
         "spark.sql.catalog.spark_catalog": "org.apache.spark.sql.delta.catalog.DeltaCatalog",
         "spark.databricks.delta.retentionDurationCheck.enabled": "false",
-        "spark.sql.catalogImplementation": "hive",
         "spark.sql.warehouse.dir": f"{warehouse_prefix}/{user}/",
+        # Delta Lake optimizations
+        "spark.databricks.delta.optimizeWrite.enabled": "true",
+        "spark.databricks.delta.autoCompact.enabled": "true",
         
-        # Hive config is set up in the base image
+        # Hive setup
+        "spark.hive.metastore.uris": os.environ["IMP_HIVE_METASTORE_URI"],
+        "spark.sql.catalogImplementation": "hive",
+        "spark.sql.hive.metastore.version": "4.0.0",
+        "spark.sql.hive.metastore.jars": "path",
+        # TODO CODE tighten this up at some point, but I don't know what jars are required
+        "spark.sql.hive.metastore.jars.path": f"{os.environ['IMP_SPARK_JARS_DIR']}/*",
     }
     
     spark_conf = SparkConf().setAll(list(config.items()))

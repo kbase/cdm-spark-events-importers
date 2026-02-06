@@ -39,10 +39,7 @@ CHECKM2_DB_SCHEMA = StructType([
 def _ensure_table(spark: SparkSession, logr: logging.Logger, full_tablename: str):
     namespace = full_tablename.split(".")[0]  # assumes just namespace and table
     spark.sql(f"CREATE DATABASE IF NOT EXISTS {namespace}")
-    try:
-        spark.sql(f"DESCRIBE TABLE {full_tablename}")
-        # table exists, all done
-    except AnalysisException:
+    if not spark.catalog.tableExists(full_tablename):
         logr.info(f"Creating new Delta table {full_tablename}")
         empty_df = spark.createDataFrame([], CHECKM2_DB_SCHEMA)
         empty_df.write.format("delta").option("compression", "snappy").saveAsTable(full_tablename)
