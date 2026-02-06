@@ -36,7 +36,8 @@ jobs:
         docker compose exec test-container pytest test -vv --cov=cdmeventimporters --cov-report xml:./coverage/coverage.xml
         TEST_EXIT=$?
         set -e
-        docker compose logs hive-metastore
+        # add debugging stuff here, e.g.
+        # docker compose logs hive-metastore
         docker compose down
         exit $TEST_EXIT
 
