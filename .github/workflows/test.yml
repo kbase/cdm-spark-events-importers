@@ -17,7 +17,7 @@ on:
 jobs:
 
   task_service_tests:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
 
     steps:
     
@@ -31,9 +31,14 @@ jobs:
         mkdir coverage
         chmod a+w coverage
 
+        set +e
         docker compose up -d --build
         docker compose exec test-container pytest test -vv --cov=cdmeventimporters --cov-report xml:./coverage/coverage.xml
+        TEST_EXIT=$?
+        set -e
+        docker compose logs hive-metastore
         docker compose down
+        exit $TEST_EXIT
 
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v5
