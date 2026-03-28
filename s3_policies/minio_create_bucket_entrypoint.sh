@@ -18,7 +18,7 @@ else
   echo "bucket $MINIO_IMPORTER_SQL_BUCKET already exists"
 fi
 
- required for hive metastore to start, since it stats the warehouse path
+# required for hive metastore to start, since it stats the warehouse path
 # seems to work even though there's no real file at the warehouse path
 echo -n "" | mc pipe minio/$MINIO_IMPORTER_SQL_BUCKET/$MINIO_SQL_WAREHOUSE_PATH/.keep
 
@@ -30,3 +30,9 @@ mc admin policy create minio test-importers-read-write-policy /s3_policies/test-
 mc admin user add minio $MINIO_IMPORTER_USER $MINIO_IMPORTER_PWD
 mc admin policy attach minio test-importers-read-write-policy --user=$MINIO_IMPORTER_USER
 echo 'importer user and policy set'
+
+# write importer credentials to the shared volume for conftest.py to load
+printf "IMP_MINIO_ACCESS_KEY=%s\nIMP_MINIO_SECRET_KEY=%s\n" \
+    "$MINIO_IMPORTER_USER" "$MINIO_IMPORTER_PWD" \
+    > /minio-credentials/creds.env
+echo "wrote minio importer credentials to /minio-credentials/creds.env"

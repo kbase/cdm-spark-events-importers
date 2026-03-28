@@ -1,5 +1,19 @@
 # This docker-compose is for developer convenience, not for running in production.
 
+# To switch S3 backends, edit the two anchors marked "# SWITCH" below.
+# Admin/root credentials are shared between MinIO and Ceph so they never need changing.
+x-s3-backend:
+  url: &s3-url http://minio:9000                           # SWITCH: http://ceph:8080
+  #url: &s3-url http://ceph:8080
+  creds_file: &s3-creds-file /minio-credentials/creds.env  # SWITCH: /ceph-credentials/creds.env
+  #creds_file: &s3-creds-file /ceph-credentials/creds.env
+  admin_key: &s3-admin-key testaccesskey
+  admin_secret: &s3-admin-secret testsecretkey
+
+volumes:
+  minio-credentials:
+  ceph-credentials:
+
 services:
 
   postgres:  # for hive
@@ -11,11 +25,48 @@ services:
       POSTGRES_PASSWORD: hivepassword
       POSTGRES_DB: hive
 
+  ceph:
+    image: ghcr.io/kbasetest/ceph-rgw-test-image:0.1.2
+    environment:
+      RGW_PORT: "8080"
+      RGW_ACCESS_KEY: *s3-admin-key
+      RGW_SECRET_KEY: *s3-admin-secret
+    ports:
+      - "9050:8080"
+      - "8445:8443"
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1:8080"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 15s
+
+  ceph-setup:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    entrypoint: ["python", "/s3_policies/ceph_setup.py"]
+    depends_on:
+      ceph:
+        condition: service_healthy
+    environment:
+      CEPH_URL: http://ceph:8080
+      CEPH_ADMIN_KEY: *s3-admin-key
+      CEPH_ADMIN_SECRET: *s3-admin-secret
+      CEPH_RAW_BUCKET: cts-output
+      CEPH_SQL_BUCKET: cdm-lake
+      CEPH_WAREHOUSE_PATH: users-sql-warehouse
+      CEPH_IMPORTER_USER: importers
+      CEPH_CREDS_FILE: /ceph-credentials/creds.env
+    volumes:
+      - ./s3_policies:/s3_policies
+      - ceph-credentials:/ceph-credentials
+
   minio:
     image: minio/minio:RELEASE.2025-02-07T23-21-09Z
     environment:
-      MINIO_ROOT_USER: miniouser
-      MINIO_ROOT_PASSWORD: miniopassword
+      MINIO_ROOT_USER: *s3-admin-key
+      MINIO_ROOT_PASSWORD: *s3-admin-secret
     ports:
       - 9000:9000
       - 9001:9001
@@ -32,8 +83,8 @@ services:
         condition: service_healthy
     environment:
       MINIO_URL: http://minio:9000
-      MINIO_USER: miniouser
-      MINIO_PWD: miniopassword
+      MINIO_USER: *s3-admin-key
+      MINIO_PWD: *s3-admin-secret
       MINIO_IMPORTER_USER: importers
       MINIO_IMPORTER_PWD: impassword
       MINIO_IMPORTER_RAW_BUCKET: cts-output
@@ -42,6 +93,7 @@ services:
     entrypoint: /s3_policies/minio_create_bucket_entrypoint.sh
     volumes:
       - ./s3_policies:/s3_policies
+      - minio-credentials:/minio-credentials
 
   hive-metastore:
     image: ghcr.io/berdatalakehouse/hive_metastore:0.0.1
@@ -54,14 +106,16 @@ services:
       POSTGRES_PASSWORD: hivepassword
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
-      S3_ENDPOINT: http://minio:9000
-      S3_ACCESS_KEY: miniouser
-      S3_SECRET_KEY: miniopassword
+      S3_ENDPOINT: *s3-url
+      S3_ACCESS_KEY: *s3-admin-key
+      S3_SECRET_KEY: *s3-admin-secret
       DELTALAKE_WAREHOUSE_DIR: s3a://cdm-lake/users-sql-warehouse
     depends_on:
       postgres:
         condition: service_started
       minio-create-bucket:
+        condition: service_completed_successfully
+      ceph-setup:
         condition: service_completed_successfully
     healthcheck:
       # hive startup is slooooow
@@ -140,24 +194,30 @@ services:
         condition: service_started
       minio-create-bucket:
         condition: service_completed_successfully
+      ceph-setup:
+        condition: service_completed_successfully
       hive-metastore:
         condition: service_healthy
     environment:
       # test variables used by the test helper code
-      IMP_MINIO_URL: http://minio:9000
-      IMP_MINIO_ACCESS_KEY: importers
-      IMP_MINIO_SECRET_KEY: impassword
+      IMP_MINIO_URL: *s3-url
       IMP_SPARK_MASTER_URL: spark://spark-master:7077
       IMP_SPARK_DRIVER_HOST: test-container
       IMP_HIVE_METASTORE_URI: thrift://hive-metastore:9083
       IMP_MINIO_IMPORTER_RAW_BUCKET: cts-output
       IMP_SQL_WAREHOUSE_PREFIX: s3a://cdm-lake/users-sql-warehouse/
 
+      # IMP_MINIO_ACCESS_KEY and IMP_MINIO_SECRET_KEY are loaded at pytest startup by
+      # test/conftest.py from the file pointed to by IMP_CREDS_FILE.
+      IMP_CREDS_FILE: *s3-creds-file
+
       # By default the mounted code directory is not writeable by spark_user. As such,
       # when running tests with coverage:
       # 1) Create a coverage dir in the repo root and make it world writeable.
       # 2) Instruct pytest to write coverage files there,
-      #    e.g. --cov-report xml:./coverage/coverage.xml 
+      #    e.g. --cov-report xml:./coverage/coverage.xml
       COVERAGE_FILE: /imp_test/coverage/.coverage
     volumes:
       - ./:/imp_test
+      - minio-credentials:/minio-credentials
+      - ceph-credentials:/ceph-credentials
