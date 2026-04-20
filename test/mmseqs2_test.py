@@ -1,3 +1,5 @@
+import csv
+import io
 import pytest
 import traceback
 from pyspark.sql.types import Row
@@ -12,12 +14,17 @@ from utils.misc import (
     get_CTS_output_bucket,
     get_s3_client,
     set_up_basic_logging,
-    write_tsv_to_s3,
 )
 from utils.spark import spark_session, SparkProvider
 
 
-_CLUSTER_HEADERS = ["representative", "member"]
+def _write_tsv_no_header(s3cli, s3_path, rows):
+    """Write TSV rows to S3 without a header — matches actual MMseqs2 output format."""
+    bucket, key = s3_path.split("/", 1)
+    buf = io.StringIO()
+    csv.writer(buf, delimiter="\t", lineterminator="\n").writerows(rows)
+    buf.seek(0)
+    s3cli.put_object(Bucket=bucket, Key=key, Body=buf.getvalue().encode("utf-8"))
 
 # Initial table state (pre-existing rows from an older job)
 _DB_INIT_DATA = [
@@ -64,8 +71,9 @@ def minio_files():
     file1 = f"{bucket}/mmseqs2/sub1/cluster_results_cluster.tsv"
     file2 = f"{bucket}/mmseqs2/sub2/cluster_results_cluster.tsv"
     s3cli = get_s3_client()
-    write_tsv_to_s3(s3cli, file1, _CLUSTER_HEADERS, _FILE1_DATA)
-    write_tsv_to_s3(s3cli, file2, _CLUSTER_HEADERS, _FILE2_DATA)
+    # MMseqs2 cluster TSV has no header — write raw rows only
+    _write_tsv_no_header(s3cli, file1, _FILE1_DATA)
+    _write_tsv_no_header(s3cli, file2, _FILE2_DATA)
     return file1, file2
 
 
