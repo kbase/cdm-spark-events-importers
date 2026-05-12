@@ -22,11 +22,11 @@ so it is recommended to check back every few hours.
 
 To add an importer two files must be added under the `cdmeventimporters` directory:
 
-* A python module file that performs the import of the CTS output into Spark Deltatables.
+* A python module file that performs the import of the CTS output into Iceberg tables.
     * The module must contain a `run_import` top level method that takes three
       parameters:
         * A function, that when called, returns a SparkSession correctly configured
-          with S3 Deltatable information and credentials.
+          with the user's Iceberg catalog (Polaris) and S3 credentials.
             * The function takes one keyword only argument: `executor_cores`, which
               is an integer that specifies the number of CPU cores for each Spark
               executor. The default is one, which in many cases is likely enough
@@ -49,7 +49,7 @@ The data structure provided in the 2nd argument to `run_import` is a dictionary:
         },
         ...
     ],
-    "namespace_prefix": <the prefix to use for any Spark SQL namespaces>,
+    "namespace_prefix": <legacy field, always an empty string under Polaris/Iceberg>,
     "image": <the image name of CTS Docker image that was run as part of the job>,
     "image_digest": <the digest of the image>,
     "input_file_count": <the number of input files for the job>,
@@ -58,9 +58,14 @@ The data structure provided in the 2nd argument to `run_import` is a dictionary:
 }
 ```
 
-For a simple importer probably only the `id`, `outputs`, and `namespace_prefix`
-fields are necessary. The job ID should be included in the deltatable for data lineage
-tracking purposes. Any SQL namespaces the importer uses must be prefixed with `namespace_prefix`.
+For a simple importer probably only the `id` and `outputs` fields are necessary.
+The job ID should be included in the table for data lineage tracking purposes.
+The Spark session is wired to the user's Iceberg catalog as the default catalog,
+so importers can address tables as `<namespace>.<table>` without any per-user prefix.
+
+The `namespace_prefix` field is retained as an empty string for backward compatibility
+with importers written against the Hive/Delta era; under Polaris the per-user catalog
+provides isolation, so the field carries no information and new importers should ignore it.
 
 #### YAML file structure
 
@@ -89,9 +94,9 @@ Note that multiple YAML files cannot reference the same Docker image.
 ### Implementation notes
 
 * In almost all cases, the importers should be reading CSV / TSV files or their equivalents
-  and writing them into Deltatables and not much else. Any heavy computational lifting should
-  be done in the CTS job. The importers should use `pyspark`, `delta-spark` and not much
-  else for processing.
+  and writing them into Iceberg tables and not much else. Any heavy computational lifting
+  should be done in the CTS job. The importers should use `pyspark` and not much else for
+  processing.
 * Do not assume that the event will only occur once. In the case of upstream failures, an
   event may be provided to the importer more than once - the importer should take this into
   account and prevent adding duplicate data to the database. The CheckM2 example code shows
