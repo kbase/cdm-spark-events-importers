@@ -69,9 +69,16 @@ def expected_data_to_rows(expected: list[tuple[Any, ...]]):
 
 
 def _drop_namespace(spark, namespace: str):
-    """Drop every table in the namespace, then the namespace itself."""
+    """Drop every table in the namespace, then the namespace itself.
+
+    Uses `DROP TABLE … PURGE` so each table's data + metadata files are
+    removed from S3 as well as the catalog entry; without PURGE the test
+    runs would accumulate orphans under the warehouse prefix. Polaris
+    rejects `DROP NAMESPACE … CASCADE` (returns NamespaceNotEmptyException),
+    so the tables have to come out one at a time before the namespace.
+    """
     for tbl in spark.sql(f"SHOW TABLES IN {namespace}").collect():
-        spark.sql(f"DROP TABLE IF EXISTS {namespace}.{tbl['tableName']}")
+        spark.sql(f"DROP TABLE IF EXISTS {namespace}.{tbl['tableName']} PURGE")
     spark.sql(f"DROP NAMESPACE IF EXISTS {namespace}")
 
 

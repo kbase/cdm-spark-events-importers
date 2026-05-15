@@ -6,7 +6,6 @@ Utilities around creating a spark session for testing.
 
 import logging
 import os
-import re
 from pathlib import Path
 
 from pyspark.conf import SparkConf
@@ -41,10 +40,6 @@ def _find_jars():
 _JARS = _find_jars()
 
 
-def _sanitize_catalog_alias(value: str) -> str:
-    return re.sub(r"[^a-z0-9_]", "_", value.lower()).strip("_")
-
-
 def _personal_catalog_name(user: str) -> str:
     template = os.environ.get("IMP_POLARIS_PERSONAL_CATALOG_TEMPLATE", "user_{user}")
     if "{user}" not in template:
@@ -57,7 +52,6 @@ def _personal_catalog_aliases(personal_catalog: str) -> list[str]:
     portable_alias = personal_catalog.strip()
     if portable_alias.startswith("user_"):
         portable_alias = portable_alias[len("user_"):]
-    portable_alias = _sanitize_catalog_alias(portable_alias)
     if portable_alias and portable_alias not in aliases:
         aliases.append(portable_alias)
     return aliases
