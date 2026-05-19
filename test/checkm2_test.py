@@ -1,15 +1,16 @@
 # TODO CHECKM2 add more test cases, failing tests etc.
 
-from pyspark.sql.types import Row
-import pytest
 import traceback
 from typing import Any
 
+import pytest
+from pyspark.sql.types import Row
+
 from cdmeventimporters.checkm2 import (
-    run_import,
     CHECKM2_DB_SCHEMA,
     CHECKM2_NAME_FIELD,
-    CTS_JOB_ID
+    CTS_JOB_ID,
+    run_import,
 )
 from utils.misc import (
     assert_pyspark_rows_almost_equal,
@@ -18,7 +19,7 @@ from utils.misc import (
     set_up_basic_logging,
     write_tsv_to_s3,
 )
-from utils.spark import spark_session, SparkProvider
+from utils.spark import SparkProvider, spark_session
 
 
 _CHECKM2_FILE_HEADERS = [field.name for field in CHECKM2_DB_SCHEMA if field.name != CTS_JOB_ID]
@@ -67,6 +68,20 @@ def expected_data_to_rows(expected: list[tuple[Any, ...]]):
     return ret
 
 
+def _drop_namespace(spark, namespace: str):
+    """Drop every table in the namespace, then the namespace itself.
+
+    Uses `DROP TABLE … PURGE` so each table's data + metadata files are
+    removed from S3 as well as the catalog entry; without PURGE the test
+    runs would accumulate orphans under the warehouse prefix. Polaris
+    rejects `DROP NAMESPACE … CASCADE` (returns NamespaceNotEmptyException),
+    so the tables have to come out one at a time before the namespace.
+    """
+    for tbl in spark.sql(f"SHOW TABLES IN {namespace}").collect():
+        spark.sql(f"DROP TABLE IF EXISTS {namespace}.{tbl['tableName']} PURGE")
+    spark.sql(f"DROP NAMESPACE IF EXISTS {namespace}")
+
+
 @pytest.fixture(scope="module")
 def minio_files():
     bucket = get_CTS_output_bucket()
@@ -79,27 +94,29 @@ def minio_files():
 
 
 def test_checkm2_success_1_file_new_table(minio_files):
-    # This test is slooow. Probably better to make a fixture that sets everything up and 
+    # This test is slooow. Probably better to make a fixture that sets everything up and
     # reuse it for other tests.
     user = "someuser"
-    namespace_prefix = f"u_{user}__"
+    namespace = "checkm2_test"
+    table = f"{namespace}.checkm2_single"
     file1 = minio_files[0]
     job_info = {
         "id": "tstjob1",
-        "namespace_prefix": namespace_prefix,
+        # Empty under Polaris/Iceberg; preserved as the back-compat contract.
+        "namespace_prefix": "",
         "outputs": [{"file": file1, "crc64nvme": "fake"}]
     }
     sparkprov = None
     try:
         # run the importer
         sparkprov = SparkProvider("test_checkm2", user)
-        run_import(sparkprov, job_info, {"deltatable": "checkm2_test.checkm2_single"})
-        
+        run_import(sparkprov, job_info, {"table": table})
+
         # might as well keep using the importer spark session. If needed make yet another
         # new session
         spark = sparkprov.spark
         # check the results
-        res_df = spark.sql(f"SELECT * FROM {namespace_prefix}checkm2_test.checkm2_single")
+        res_df = spark.sql(f"SELECT * FROM {table}")
         actual_data = res_df.orderBy(CHECKM2_NAME_FIELD).collect()
         assert_pyspark_rows_almost_equal(
             actual_data, expected_data_to_rows(_CHECKM2_EXPECTED_DATA_FILE1)
@@ -111,19 +128,20 @@ def test_checkm2_success_1_file_new_table(minio_files):
         if sparkprov:
             sparkprov.stop()
         spark_clean = spark_session("test_checkm2_helper", user)
-        spark_clean.sql(f"DROP DATABASE IF EXISTS {namespace_prefix}checkm2_test CASCADE")
+        _drop_namespace(spark_clean, namespace)
         spark_clean.stop()
 
 
 def test_checkm2_success_2_files_existing_table(minio_files):
-    # This test is slooow. Probably better to make a fixture that sets everything up and 
+    # This test is slooow. Probably better to make a fixture that sets everything up and
     # reuse it for other tests.
     user = "testuser"
-    namespace_prefix = f"u_{user}__"
+    namespace = "checkm2_test"
+    table = f"{namespace}.checkm2"
     file1, file2 = minio_files
     job_info = {
         "id": "tstjob2",
-        "namespace_prefix": namespace_prefix,
+        "namespace_prefix": "",
         "outputs": [
             {
                 "file": file1,
@@ -142,25 +160,20 @@ def test_checkm2_success_2_files_existing_table(minio_files):
     spark_setup = spark_session("test_checkm2_startup", user)
     sparkprov = None
     try:
-        spark_setup.sql(f"CREATE DATABASE IF NOT EXISTS {namespace_prefix}checkm2_test")
+        spark_setup.sql(f"CREATE NAMESPACE IF NOT EXISTS {namespace}")
         df = spark_setup.createDataFrame(_CHECKM2_DB_INIT_DATA, schema=CHECKM2_DB_SCHEMA)
-        df.write.mode(
-            "overwrite"
-            ).option("compression", "snappy"
-            ).format("delta"
-            ).saveAsTable(f"{namespace_prefix}checkm2_test.checkm2"
-        )
+        df.writeTo(table).using("iceberg").createOrReplace()
         spark_setup.stop()
 
         # run the importer
         sparkprov = SparkProvider("test_checkm2", user)
-        run_import(sparkprov, job_info, {"deltatable": "checkm2_test.checkm2"})
-        
+        run_import(sparkprov, job_info, {"table": table})
+
         # might as well keep using the importer spark session. If needed make yet another
         # new session
         spark = sparkprov.spark
         # check the results
-        res_df = spark.sql(f"SELECT * FROM {namespace_prefix}checkm2_test.checkm2")
+        res_df = spark.sql(f"SELECT * FROM {table}")
         actual_data = res_df.orderBy(CHECKM2_NAME_FIELD).collect()
         assert_pyspark_rows_almost_equal(
             actual_data, expected_data_to_rows(_CHECKM2_EXPECTED_DATA_FULL)
@@ -173,5 +186,5 @@ def test_checkm2_success_2_files_existing_table(minio_files):
         if sparkprov:
             sparkprov.stop()
         spark_clean = spark_session("test_checkm2_helper", user)
-        spark_clean.sql(f"DROP DATABASE IF EXISTS {namespace_prefix}checkm2_test CASCADE")
+        _drop_namespace(spark_clean, namespace)
         spark_clean.stop()

@@ -7,6 +7,7 @@ py_module: cdmeventimporters.checkm2
 image:  ghcr.io/kbasetest/cdm_checkm2
 # Metadata for the importer.
 importer_meta:
-    # The table where checkm2 data should be stored
-    # Does NOT include the namespace prefix for the user.
-    deltatable: autoimport.checkm2
+    # The table where checkm2 data should be stored, in `<namespace>.<table>` format.
+    # The Spark session resolves this against the user's Iceberg catalog (the default
+    # catalog `my`), so no per-user prefix is required.
+    table: autoimport.checkm2
