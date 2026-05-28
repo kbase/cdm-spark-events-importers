@@ -1,13 +1,14 @@
 import csv
 import io
-import pytest
 import traceback
+
+import pytest
 from pyspark.sql.types import Row
 
 from cdmeventimporters.mmseqs2 import (
-    run_import,
-    MMSEQS2_CLUSTER_SCHEMA,
     CTS_JOB_ID,
+    MMSEQS2_CLUSTER_SCHEMA,
+    run_import,
 )
 from utils.misc import (
     assert_pyspark_rows_almost_equal,
@@ -15,16 +16,29 @@ from utils.misc import (
     get_s3_client,
     set_up_basic_logging,
 )
-from utils.spark import spark_session, SparkProvider
+from utils.spark import SparkProvider, spark_session
 
 
 def _write_tsv_no_header(s3cli, s3_path, rows):
-    """Write TSV rows to S3 without a header — matches actual MMseqs2 output format."""
+    """Write TSV rows to S3 without a header - matches actual MMseqs2 output format."""
     bucket, key = s3_path.split("/", 1)
     buf = io.StringIO()
     csv.writer(buf, delimiter="\t", lineterminator="\n").writerows(rows)
     buf.seek(0)
     s3cli.put_object(Bucket=bucket, Key=key, Body=buf.getvalue().encode("utf-8"))
+
+
+def _drop_namespace(spark, namespace: str):
+    """Drop every table in the namespace, then the namespace itself.
+
+    Same pattern as checkm2_test: Polaris rejects `DROP NAMESPACE ... CASCADE`, so the
+    tables have to come out one at a time before the namespace. `PURGE` removes data
+    + metadata files from S3 so warehouse orphans don't accumulate across test runs.
+    """
+    for tbl in spark.sql(f"SHOW TABLES IN {namespace}").collect():
+        spark.sql(f"DROP TABLE IF EXISTS {namespace}.{tbl['tableName']} PURGE")
+    spark.sql(f"DROP NAMESPACE IF EXISTS {namespace}")
+
 
 # Initial table state (pre-existing rows from an older job)
 _DB_INIT_DATA = [
@@ -71,7 +85,7 @@ def minio_files():
     file1 = f"{bucket}/mmseqs2/sub1/cluster_results_cluster.tsv"
     file2 = f"{bucket}/mmseqs2/sub2/cluster_results_cluster.tsv"
     s3cli = get_s3_client()
-    # MMseqs2 cluster TSV has no header — write raw rows only
+    # MMseqs2 cluster TSV has no header - write raw rows only
     _write_tsv_no_header(s3cli, file1, _FILE1_DATA)
     _write_tsv_no_header(s3cli, file2, _FILE2_DATA)
     return file1, file2
@@ -79,40 +93,43 @@ def minio_files():
 
 def test_mmseqs2_success_1_file_new_table(minio_files):
     user = "someuser"
-    namespace_prefix = f"u_{user}__"
+    namespace = "mmseqs2_test"
+    table = f"{namespace}.mmseqs2_single"
     file1 = minio_files[0]
     job_info = {
         "id": "tstjob1",
-        "namespace_prefix": namespace_prefix,
+        # Empty under Polaris/Iceberg; preserved as the back-compat contract.
+        "namespace_prefix": "",
         "outputs": [{"file": file1, "crc64nvme": "fake"}],
     }
     sparkprov = None
     try:
         sparkprov = SparkProvider("test_mmseqs2", user)
-        run_import(sparkprov, job_info, {"deltatable": "mmseqs2_test.mmseqs2_single"})
+        run_import(sparkprov, job_info, {"table": table})
 
         spark = sparkprov.spark
-        res_df = spark.sql(f"SELECT * FROM {namespace_prefix}mmseqs2_test.mmseqs2_single")
+        res_df = spark.sql(f"SELECT * FROM {table}")
         actual = res_df.orderBy("representative", "member").collect()
         assert_pyspark_rows_almost_equal(actual, _rows(_EXPECTED_FILE1))
     except Exception:
-        traceback.print_exc()
+        traceback.print_exc()  # can get shadowed by exception in the finally block
         raise
     finally:
         if sparkprov:
             sparkprov.stop()
         spark_clean = spark_session("test_mmseqs2_helper", user)
-        spark_clean.sql(f"DROP DATABASE IF EXISTS {namespace_prefix}mmseqs2_test CASCADE")
+        _drop_namespace(spark_clean, namespace)
         spark_clean.stop()
 
 
 def test_mmseqs2_success_2_files_existing_table(minio_files):
     user = "testuser"
-    namespace_prefix = f"u_{user}__"
+    namespace = "mmseqs2_test"
+    table = f"{namespace}.mmseqs2_clusters"
     file1, file2 = minio_files
     job_info = {
         "id": "tstjob2",
-        "namespace_prefix": namespace_prefix,
+        "namespace_prefix": "",
         "outputs": [
             {"file": file1, "crc64nvme": "fake"},
             {"file": f"{get_CTS_output_bucket()}/mmseqs2/sub1/other_file.tsv", "crc64nvme": "fake"},
@@ -122,18 +139,16 @@ def test_mmseqs2_success_2_files_existing_table(minio_files):
     spark_setup = spark_session("test_mmseqs2_startup", user)
     sparkprov = None
     try:
-        spark_setup.sql(f"CREATE DATABASE IF NOT EXISTS {namespace_prefix}mmseqs2_test")
+        spark_setup.sql(f"CREATE NAMESPACE IF NOT EXISTS {namespace}")
         df = spark_setup.createDataFrame(_DB_INIT_DATA, schema=MMSEQS2_CLUSTER_SCHEMA)
-        df.write.mode("overwrite").option("compression", "snappy").format("delta").saveAsTable(
-            f"{namespace_prefix}mmseqs2_test.mmseqs2_clusters"
-        )
+        df.writeTo(table).using("iceberg").create()
         spark_setup.stop()
 
         sparkprov = SparkProvider("test_mmseqs2", user)
-        run_import(sparkprov, job_info, {"deltatable": "mmseqs2_test.mmseqs2_clusters"})
+        run_import(sparkprov, job_info, {"table": table})
 
         spark = sparkprov.spark
-        res_df = spark.sql(f"SELECT * FROM {namespace_prefix}mmseqs2_test.mmseqs2_clusters")
+        res_df = spark.sql(f"SELECT * FROM {table}")
         actual = res_df.orderBy("representative", "member", CTS_JOB_ID).collect()
         assert_pyspark_rows_almost_equal(actual, _rows(_EXPECTED_FULL))
     except Exception:
@@ -144,38 +159,36 @@ def test_mmseqs2_success_2_files_existing_table(minio_files):
         if sparkprov:
             sparkprov.stop()
         spark_clean = spark_session("test_mmseqs2_helper", user)
-        spark_clean.sql(f"DROP DATABASE IF EXISTS {namespace_prefix}mmseqs2_test CASCADE")
+        _drop_namespace(spark_clean, namespace)
         spark_clean.stop()
 
 
 def test_mmseqs2_no_cluster_files_raises(minio_files):
     user = "someuser"
-    namespace_prefix = f"u_{user}__"
     job_info = {
         "id": "tstjob3",
-        "namespace_prefix": namespace_prefix,
+        "namespace_prefix": "",
         "outputs": [{"file": f"{get_CTS_output_bucket()}/mmseqs2/sub1/rep_seq.fasta", "crc64nvme": "fake"}],
     }
     sparkprov = SparkProvider("test_mmseqs2_err", user)
     try:
         with pytest.raises(ValueError, match="No MMseqs2 cluster TSV files found"):
-            run_import(sparkprov, job_info, {"deltatable": "mmseqs2_test.mmseqs2_err"})
+            run_import(sparkprov, job_info, {"table": "mmseqs2_test.mmseqs2_err"})
     finally:
         sparkprov.stop()
 
 
-def test_mmseqs2_no_deltatable_in_metadata_raises(minio_files):
+def test_mmseqs2_no_table_in_metadata_raises(minio_files):
     user = "someuser"
-    namespace_prefix = f"u_{user}__"
     file1 = minio_files[0]
     job_info = {
         "id": "tstjob4",
-        "namespace_prefix": namespace_prefix,
+        "namespace_prefix": "",
         "outputs": [{"file": file1, "crc64nvme": "fake"}],
     }
     sparkprov = SparkProvider("test_mmseqs2_meta_err", user)
     try:
-        with pytest.raises(ValueError, match="deltatable"):
+        with pytest.raises(ValueError, match="'table' key"):
             run_import(sparkprov, job_info, {})
     finally:
         sparkprov.stop()
