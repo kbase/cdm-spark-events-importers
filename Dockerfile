@@ -1,4 +1,4 @@
-FROM ghcr.io/berdatalakehouse/kube_spark_manager_image:pr-17
+FROM ghcr.io/kbasedatalakehouse/kube_spark_manager_image:pr-17
 
 # This is a container specifically for running tests. It is not intended to be deployed anywhere.
 
