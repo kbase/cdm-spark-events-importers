@@ -55,7 +55,7 @@ services:
       - ./s3_policies:/s3_policies
 
   hive-metastore:
-    image: ghcr.io/berdatalakehouse/hive_metastore:0.0.1
+    image: ghcr.io/kbasedatalakehouse/hive_metastore:0.0.1
     platform: linux/amd64
     ports:
       - "9083:9083"
@@ -147,7 +147,7 @@ services:
       - polaris-credential:/shared-polaris
 
   spark-master:
-    image: ghcr.io/berdatalakehouse/kube_spark_manager_image:pr-17
+    image: ghcr.io/kbasedatalakehouse/kube_spark_manager_image:pr-17
     platform: linux/amd64
     ports:
       - 8090:8090
@@ -161,7 +161,7 @@ services:
       MAX_CORES_PER_APPLICATION: 10
 
   spark-worker-1:
-    image: ghcr.io/berdatalakehouse/kube_spark_manager_image:pr-17
+    image: ghcr.io/kbasedatalakehouse/kube_spark_manager_image:pr-17
     platform: linux/amd64
     depends_on:
       - spark-master
@@ -181,7 +181,7 @@ services:
       BERDL_DELTALAKE_WAREHOUSE_DIRECTORY_PATH: fake
 
   spark-worker-2:
-    image: ghcr.io/berdatalakehouse/kube_spark_manager_image:pr-17
+    image: ghcr.io/kbasedatalakehouse/kube_spark_manager_image:pr-17
     platform: linux/amd64
     depends_on:
       - spark-master
