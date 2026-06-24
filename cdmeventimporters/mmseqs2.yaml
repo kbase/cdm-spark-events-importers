@@ -1,0 +1,13 @@
+# The name of the importer. Informational purposes only.
+name: mmseqs2
+# The location of the importer module containing the `run_import` method.
+py_module: cdmeventimporters.mmseqs2
+# The image associated with the importer. This importer will run when a CTS job completes
+# with this image.
+image: ghcr.io/kbaseincubator/cdm_mmseqs2
+# Metadata for the importer.
+importer_meta:
+    # The table where mmseqs2 cluster data should be stored, in `<namespace>.<table>` format.
+    # The Spark session resolves this against the user's Iceberg catalog (the default
+    # catalog `my`), so no per-user prefix is required.
+    table: autoimport.mmseqs2_clusters
