@@ -16,6 +16,6 @@ dependencies = [
 dev = [
     "boto3==1.38.31",
     "ipython==9.3.0",
-    "pytest==8.4.0",
+    "pytest==9.0.3",
     "pytest-cov==6.1.1",
 ]
