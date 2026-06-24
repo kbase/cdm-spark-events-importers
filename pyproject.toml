@@ -14,7 +14,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "boto3==1.38.31",
+    "boto3==1.43.2",
     "ipython==9.3.0",
     "pytest==8.4.0",
     "pytest-cov==6.1.1",
